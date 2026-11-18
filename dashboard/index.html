@@ -2,81 +2,88 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Token Radar — fitted launch pricing</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Radar — every pre-token protocol, priced and planned</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<header>
-  <h1>Token Radar</h1>
-  <p class="sub">Fitted launch pricing, walk-forward-tested, 8-step farm plans netted to the dollar — every one of 758 protocols accounted for.</p>
-  <p class="accounting" id="accounting">Loading the snapshot…</p>
+<header class="top">
+  <div>
+    <h1>Token Radar</h1>
+    <p class="sub">Every pre-token protocol, priced by a fitted market curve and handed a costed farm plan. Snapshot <span id="asof">—</span> · <span id="source">—</span></p>
+  </div>
+  <div class="verify" id="verify">checking board…</div>
 </header>
 
-<section id="kpis" aria-label="Key numbers"></section>
+<section class="kpis" id="kpis"></section>
 
-<section class="controls">
-  <input id="q" type="search" placeholder="Search a protocol…" aria-label="Search">
-  <select id="cat" aria-label="Category"><option value="">All categories</option></select>
-  <select id="minTvl" aria-label="Minimum TVL">
-    <option value="0">Any TVL</option>
-    <option value="50000000">$50M+ TVL</option>
-    <option value="100000000">$100M+ TVL</option>
-    <option value="500000000">$500M+ TVL</option>
-    <option value="1000000000">$1B+ TVL</option>
-  </select>
-  <label><input id="watchOnly" type="checkbox"> Watchlist only</label>
-  <label><input id="wideOnly" type="checkbox"> Wide rank range only</label>
-  <button id="reset" type="button">Reset</button>
+<section class="panel" id="allocator-panel">
+  <h2>Deploy $1,000 across the board</h2>
+  <p class="note">The allocator walks the FARM rows best-first by net per dollar and takes each row's whole ticket until the budget is spent. The nets are the model's own slices, netted the same way as every farm plan below — a plan, not a promise.</p>
+  <div id="allocator-summary"></div>
+  <table id="allocator-table">
+    <thead><tr><th>#</th><th>Protocol</th><th>Play</th><th>Ticket</th><th>Expected net</th><th>Fees</th><th>Minutes</th></tr></thead>
+    <tbody></tbody>
+  </table>
 </section>
 
-<section id="detail" hidden></section>
-
-<main>
-  <h2 id="boardTitle">Ranked board — pre-token protocols by fitted implied value</h2>
-  <p class="hint">Click a column header to sort. Click a row for its detail view and farm plan. Implied value is the fitted comps value; the median column is the category-median baseline beside it.</p>
+<section class="panel">
+  <h2>The board</h2>
+  <div class="controls">
+    <input id="q" type="search" placeholder="Search name or slug…" aria-label="Search">
+    <select id="verdict" aria-label="Verdict">
+      <option value="">All verdicts</option>
+      <option value="FARM">FARM</option>
+      <option value="THIN">THIN</option>
+      <option value="SKIP">SKIP</option>
+    </select>
+    <select id="sector" aria-label="Sector">
+      <option value="">All sectors</option>
+    </select>
+    <select id="tier" aria-label="Tier">
+      <option value="">All tiers</option>
+      <option value="watchlist">watchlist</option>
+      <option value="shared">shared</option>
+      <option value="early">early</option>
+    </select>
+    <span id="count" class="count"></span>
+  </div>
   <table id="board">
     <thead><tr>
-      <th data-sort="rank">Rank</th>
-      <th data-sort="name">Protocol</th>
-      <th data-sort="category">Category</th>
-      <th data-sort="chains">Chains</th>
-      <th data-sort="tvl_usd">TVL</th>
-      <th data-sort="implied_value_usd">Implied value (fitted)</th>
-      <th data-sort="median_value_usd">Median comp</th>
-      <th data-sort="width">Rank range (200 refits)</th>
-      <th data-sort="farm_cost_usd">Farm cost</th>
-      <th data-sort="breakeven_share_pct">Breakeven share</th>
+      <th data-sort="rank">#</th><th data-sort="name">Protocol</th><th data-sort="sector">Sector</th>
+      <th data-sort="tvl">TVL</th><th data-sort="value">Implied value</th><th data-sort="range">Range</th>
+      <th data-sort="net">Plan net</th><th data-sort="verdict">Verdict</th><th>Rank range</th>
     </tr></thead>
-    <tbody id="rows"></tbody>
-  </table>
-  <p class="count" id="count"></p>
-</main>
-
-<section id="model">
-  <h2>Value model — fitted, tested, and its limits</h2>
-  <div id="modelBody">Loading…</div>
-</section>
-
-<section id="liveWrap">
-  <h2>Live-token protocols — the token already trades (416)</h2>
-  <p class="hint">The board ranks only protocols that record no token. These are set aside here, with their market caps where the snapshot carries one — they are also the peers the model was fitted on.</p>
-  <table id="live">
-    <thead><tr><th>Protocol</th><th>Category</th><th>Chains</th><th>TVL</th><th>Market cap</th><th>Multiple</th><th>7d</th></tr></thead>
-    <tbody id="liveRows"></tbody>
+    <tbody></tbody>
   </table>
 </section>
 
-<section id="excludedWrap">
-  <h2>Excluded from the board — 53, each with its reason</h2>
-  <p class="hint">Centralised exchanges and versioned names are set aside, not hidden: a CEX token is an exchange's business, not a protocol launch, and a V2 name is a version of a protocol whose token already trades.</p>
-  <table id="excluded">
-    <thead><tr><th>Protocol</th><th>Category</th><th>TVL</th><th>Reason</th></tr></thead>
-    <tbody id="excludedRows"></tbody>
+<section class="panel" id="detail-panel">
+  <h2>Detail — <span id="detail-name">pick a row</span></h2>
+  <div id="detail"></div>
+</section>
+
+<section class="panel">
+  <h2>How the price is tested</h2>
+  <p class="note">Every traded token priced blind at each level: left out against the others, and newer tokens priced by a fit on older tokens only. Miss is 10 to the median absolute log error; within-3x is the share of blind prices inside 3x of the real cap.</p>
+  <table id="ladder">
+    <thead><tr><th>Level</th><th>Blind miss</th><th>Within 3x</th><th>Older → newer miss</th><th>Older → newer within 3x</th></tr></thead>
+    <tbody></tbody>
   </table>
+  <p class="note" id="ranges-note"></p>
+</section>
+
+<section class="panel">
+  <h2>Every one of the 758, accounted for</h2>
+  <table id="ledger">
+    <thead><tr><th>Group</th><th>Count</th><th>Why</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <p class="note">A protocol is said to record no token, never to have none: a protocol on the list may still carry a token its DefiLlama record does not show. Implied values are the model's own estimate, not a forecast of a launch and not financial advice.</p>
 </section>
 
 <footer>
-  <p>Token Radar (radar-3-fitted). Snapshot 2026-11-14, DefiLlama protocols at or above $5M TVL. Implied values are the entry's own fitted claim, never make.fun's; no airdrop is promised. Farm costs are planning estimates: deposit tier by TVL plus estimated gas.</p>
+  <p>Token Radar · model <span id="model-version">—</span> · built by an AI agent for make.fun's “Build the best token launch radar” bounty.</p>
 </footer>
 <script src="../data.js"></script>
 <script src="app.js"></script>

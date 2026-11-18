@@ -1,13 +1,15 @@
-// Token Radar v3 ("radar-3-fitted").
+// Token Radar v3 (radar-4-robust-allocator) — entrypoint (Node 22, standard library only).
 //
 // The program reads the sealed snapshot from /input/snapshot.json (or --input
-// <file|dir>), fits the launch-pricing model on the live-token peers, validates it
-// walk-forward and leave-one-out, re-ranks the board across 200 bootstrap refits
-// for rank ranges, and writes the ranked board to /output/board.json, the
-// dashboard's data beside the page, a generated model report into the dashboard
-// (so the judge's text read carries the measured numbers), and /output/dossier.json
-// with the vendored make.fun library. It copies this repository's dashboard/ and
-// screenshots/ to /output.
+// <file|dir>), scores every pre-token protocol with the robust fitted model in
+// lib/, writes the ranked board to /output/board.json, and copies this
+// repository's dashboard/ and screenshots/ to /output. Last, it writes
+// /output/dossier.json, the summary the judge reads, with the vendored make.fun
+// library.
+//
+// The dashboard is a static page, no framework and no network: dashboard/index.html,
+// dashboard/app.css and dashboard/app.js read /output/data.js, which this program
+// writes from the same board.
 //
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input ../input/snapshot.json
@@ -15,7 +17,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { boardIssue, buildRadar, dataScript, type Radar } from './lib/board.ts';
+import { boardIssue, buildRadar, dataScript } from './lib/board.ts';
 import { parseSnapshot } from './lib/snapshot.ts';
 import { buildDossier } from './vendor/makefun-board.ts';
 
@@ -43,15 +45,15 @@ if (!existsSync(inputFile)) {
 const out = arg('output', process.env.MAKEFUN_OUTPUT_DIR ?? '/output');
 
 const snapshot = parseSnapshot(readFileSync(inputFile, 'utf8'));
-const radar = buildRadar(snapshot);
-const issue = boardIssue(radar.board, snapshot);
+const { board, radar } = buildRadar(snapshot);
+const issue = boardIssue(board, snapshot);
 if (issue !== null) {
   process.stderr.write(`token radar: the model wrote a board the gate refuses: ${issue}\n`);
   process.exit(1);
 }
 
 mkdirSync(out, { recursive: true });
-writeFileSync(join(out, 'board.json'), `${JSON.stringify({ rows: radar.board })}\n`);
+writeFileSync(join(out, 'board.json'), `${JSON.stringify({ as_of: snapshot.as_of, source: snapshot.source, model: radar.model_version, rows: board })}\n`);
 writeFileSync(join(out, 'data.js'), dataScript(radar));
 
 /** Copy one directory's regular files into `to`, skipping names that start with a dot. */
@@ -82,62 +84,14 @@ for (const name of shots) {
   }
 }
 
-// The model report is written into the dashboard so the dossier's text read
-// carries the measured numbers (the dossier's text is the dashboard's source).
-// It is generated from the same computed object the page renders, so the text and
-// the screenshots can never disagree.
-writeFileSync(join(out, 'dashboard', 'model.md'), modelReport(radar));
-
 // The dossier is written last: the scorer rebuilds it from this /output and compares bytes.
 writeFileSync(join(out, 'dossier.json'), buildDossier(out, { text_max_bytes: TEXT_MAX_BYTES, screenshots: SCREENSHOT_CAPS, dashboard: { max_files: 400, max_bytes: 4_194_304 } }));
 
-const m = radar.metrics;
-const a = radar.accounting;
+const farm = board.filter((r) => r.plan.verdict === 'FARM').length;
+const thin = board.filter((r) => r.plan.verdict === 'THIN').length;
 process.stdout.write(
-  `token radar: ${a.total} protocols, ${a.watchlist} on the watchlist, ${radar.board.length} rows ranked (${a.live} live set aside, ${a.excluded} excluded)\n` +
-    `token radar: fitted model on ${m.nTrainingPeers} live peers: R2 ${m.r2.toFixed(4)}, RMSE(log) ${m.rmseLog.toFixed(4)}, median abs log error ${m.medAeLog.toFixed(4)}, median abs pct error ${(m.medAbsPctErr * 100).toFixed(1)}%\n` +
-    `token radar: walk-forward (cutoff ${m.walkForwardCutoff}, train ${m.walkForwardNTrain}, test ${m.walkForwardNTest}): median abs log error ${m.walkForwardMedAeLog.toFixed(4)}, median abs pct error ${(m.walkForwardMedAbsPctErr * 100).toFixed(1)}%\n` +
-    `token radar: leave-one-out (${m.nTrainingPeers} refits): median abs log error ${m.looMedAeLog.toFixed(4)}, median abs pct error ${(m.looMedAbsPctErr * 100).toFixed(1)}%\n` +
-    `token radar: rank ranges from ${m.refits} bootstrap refits: ${m.wideRankRanges} rows with a range wider than half the board (144 ranks); ties nudged ${m.tiesNudged}; global median multiple ${m.globalMultiple.toFixed(4)}; median farm cost $${Math.round(m.medianFarmCostUsd)}\n` +
+  `token radar: ${snapshot.protocols.length} protocols, ${snapshot.watchlist.length} on the watchlist, ${board.length} rows scored (${farm} FARM, ${thin} THIN, ${board.length - farm - thin} SKIP)\n` +
+    `token radar: model ${radar.model_version} on ${radar.model.comps} comparables; LOO miss ${radar.validation.ladder[3]!.miss.toFixed(4)}x, within-3x ${(radar.validation.ladder[3]!.within3 * 100).toFixed(1)}%\n` +
+    `token radar: allocator deploys $${radar.allocator.deployed} over ${radar.allocator.legs.length} legs, expected net $${radar.allocator.expectedNet.toFixed(2)}\n` +
     `token radar: wrote ${join(out, 'board.json')}, ${join(out, 'data.js')}, ${join(out, 'dashboard')}, ${join(out, 'screenshots')} (${shots.length} images) and ${join(out, 'dossier.json')}\n`,
 );
-
-/** The generated model report: every measured number, in the dossier's text read. */
-function modelReport(radar: Radar): string {
-  const m = radar.metrics;
-  const a = radar.accounting;
-  const lines: string[] = [];
-  lines.push('# Token Radar — model report (generated, radar-3-fitted)');
-  lines.push('');
-  lines.push(`Snapshot ${radar.asOf}, floor $${radar.floorUsd.toLocaleString('en-US')}. Accounting, counted from the snapshot by the program: ${a.total} protocols = ${a.ranked} ranked + ${a.live} live-token (${a.liveNonCex} non-CEX + ${a.liveCex} CEX) + ${a.excluded} excluded. Watchlist ${a.watchlistCovered}/${a.watchlist} covered.`);
-  lines.push('');
-  lines.push('## Value model: fitted launch pricing');
-  lines.push('');
-  lines.push('log(market cap) ~ log(TVL) + log(TVL)^2 (centred) + age in years + age-missing flag + log(1 + chains) + 7-day TVL change clipped to [-50%, +200%] + category effects for categories with at least 8 live peers. Fit by ordinary least squares on the live-token peers that carry both a market cap and a TVL in the snapshot. A pre-token protocol\'s implied value is exp(predicted log market cap). The peer-multiple median (per category, else global) is shown beside the fitted value on every row as the transparent baseline.');
-  lines.push('');
-  lines.push(`Fit on ${m.nTrainingPeers} live peers: R2 ${m.r2.toFixed(4)}; RMSE in log terms ${m.rmseLog.toFixed(4)}; median absolute log error ${m.medAeLog.toFixed(4)}; median absolute percentage error ${(m.medAbsPctErr * 100).toFixed(1)}%. Global median multiple ${m.globalMultiple.toFixed(4)}. Top implied value $${m.topImpliedValueUsd.toLocaleString('en-US')}. Median farm cost $${Math.round(m.medianFarmCostUsd)}.`);
-  lines.push('');
-  lines.push('Fitted coefficients (feature: coefficient):');
-  for (let i = 0; i < m.featureNames.length; i++) {
-    lines.push(`- ${m.featureNames[i]}: ${m.beta[i]!.toFixed(4)}`);
-  }
-  lines.push('');
-  lines.push('## Validation, measured not asserted');
-  lines.push('');
-  lines.push(`Walk-forward: fit on protocols listed on or before ${m.walkForwardCutoff} (${m.walkForwardNTrain} peers), tested on protocols listed after it (${m.walkForwardNTest} peers). Median absolute log error ${m.walkForwardMedAeLog.toFixed(4)}; median absolute percentage error ${(m.walkForwardMedAbsPctErr * 100).toFixed(1)}%.`);
-  lines.push(`Leave-one-out: ${m.nTrainingPeers} refits, each holding one peer out. Median absolute log error ${m.looMedAeLog.toFixed(4)}; median absolute percentage error ${(m.looMedAbsPctErr * 100).toFixed(1)}%. The transparent baseline (category median multiple, leave-one-out) scores ${m.baselineLooMedAeLog.toFixed(4)} median absolute log error and ${(m.baselineLooMedAbsPctErr * 100).toFixed(1)}% median absolute percentage error: the fitted model beats the median on both.`);
-  lines.push(`Rank ranges: ${m.refits} deterministic bootstrap refits (seed 20261114, specification fixed from the full training set) re-rank the whole board. ${m.wideRankRanges} of ${radar.board.length} rows have a rank range wider than half the board (144 ranks); those rows are flagged on the board as uncertain, not hidden. ${m.tiesNudged} fitted values were nudged down by $1 to keep implied values strictly non-increasing with rank.`);
-  lines.push('');
-  lines.push('## Peer multiples by category (median market-cap/TVL, categories with at least 3 live peers)');
-  lines.push('');
-  for (const row of m.peerTable) {
-    lines.push(`- ${row.category}: ${row.peers} peers, median multiple ${row.medianMultiple.toFixed(4)}`);
-  }
-  lines.push('');
-  lines.push('## What this does not claim');
-  lines.push('');
-  const datedPeers = m.walkForwardNTrain + m.walkForwardNTest;
-  const undatedPeers = m.nTrainingPeers - datedPeers;
-  lines.push(`The implied value is a comps fit, not a prediction that a token launches, when it launches, or what it lists at. No airdrop is promised anywhere: farm plans are costed (deposit tier by TVL plus estimated gas) and netted against the fitted value, and the breakeven share is the arithmetic share of the fitted value a future airdrop would have to be worth to cover the plan's cost. Categories with fewer than 8 live peers have no category effect and pool into the intercept; ${undatedPeers} of the ${m.nTrainingPeers} training peers carry no listing date, so the walk-forward test covers the dated ${datedPeers} only. Gas figures are planning estimates at typical fees, not quotes.`);
-  return `${lines.join('\n')}\n`;
-}
