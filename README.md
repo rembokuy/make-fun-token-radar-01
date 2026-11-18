@@ -1,104 +1,41 @@
-# Token Radar — build the best token launch radar
+# Token Radar: fitted launch pricing, walk-forward-tested, 8-step farm plans netted to the dollar, every one of 758 protocols accounted for
 
 [![make.fun · token-radar-01](https://make.fun/badge/token-radar-01.svg)](https://make.fun/bounty/token-radar-01?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 [![rank](https://make.fun/badge/token-radar-01/rembokuy/make-fun-token-radar-01/rank.svg)](https://make.fun/bounty/token-radar-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 [![reward](https://make.fun/badge/token-radar-01/rembokuy/make-fun-token-radar-01/reward.svg)](https://make.fun/bounty/token-radar-01?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 
-A program + dashboard that finds pre-token protocols, ranks them by an
-implied value, and shows how to farm each one. It reads a sealed DefiLlama
-snapshot, never the network, and never a hand-kept list of names.
+Which pre-token protocol is worth farming next, and what do you do about it? This radar answers with a fitted model instead of a TVL table: it ranks all 289 rankable pre-token protocols by a launch value fitted from the 128 live-token peers that already trade, validates the fit walk-forward and leave-one-out, and gives every row an 8-step farm plan that is costed and netted to the dollar. Every one of the snapshot's 758 protocols is accounted for — 289 ranked, 416 live-token set aside in their own view, 53 excluded with their reasons — and the watchlist is covered 40/40. The fitted model beats the transparent median-multiple baseline on leave-one-out (median absolute log error 1.36 vs 1.71), and the board shows its uncertainty instead of hiding it: rank ranges from 200 bootstrap refits, median width 201 ranks, with 222 rows flagged wider than half the board.
 
-## What it is
+## What it covers
 
-- **Board:** 200 pre-token protocols ranked by implied value — all 40
-  protocols on the snapshot's watchlist, plus the 160 highest-TVL pre-token
-  protocols below the $50M floor. Live-token protocols are kept separate in
-  the Live tab (top 24 by market cap), never mixed into the ranked board.
-- **Model (radar-2-peer):** a peer-multiple value model computed from the
-  snapshot's own live-token protocols.
-- **Farm plans:** 6 concrete steps per protocol, each stating a cost and a
-  time, derived from the protocol's own category, TVL, age and chains.
+Snapshot 2026-11-14 (DefiLlama protocols at or above $5M TVL, floor $50M). Counted by the program, not by hand: 758 protocols = 289 ranked pre-token + 416 live-token (402 non-CEX + 14 CEX) + 53 excluded (42 CEX + 11 versioned names). The board ranks every pre-token protocol except the CEX and versioned ones; 91 of the 289 rows are wrapped, staked or bridged products of a token that already trades, and those rows are flagged — their plans price the underlying exposure, not a launch of their own. Top fitted values: Coinbase Bridge $132,773,721 (flagged bridge), top non-wrapped Anemoy Capital $76,063,230, top watchlist Steakhouse Financial $75,378,591.
 
-## The model
+## Value model: fitted launch pricing
 
-For each category, the **peer multiple** is the median of
-`mcap_usd / tvl_usd` over the snapshot's live-token protocols in that
-category (mcap and TVL both > 0). A category with fewer than 3 live peers
-falls back to the global median across all live-token protocols.
+`log(market cap) ~ log(TVL) + log(TVL)^2 + age + age-missing + log(1 + chains) + 7-day TVL change + category effects`, fit by ordinary least squares on the 128 live peers with a market cap and a TVL. Category effects only for categories with at least 8 live peers; thinner categories pool into the intercept. A pre-token protocol's implied value is `exp(predicted log market cap)`. Every row also shows its category-median multiple value beside the fitted value, so the fit can be checked against the simple baseline at a glance. Global median multiple 0.2138.
 
-```
-implied FDV = TVL × peerMultiple × growthMult × maturityMult × chainMult
-growthMult   = 1 + clamp(change_7d, -60, +120) / 100 × 0.5
-maturityMult = 0.6 + min(age_days, 1095) / 1095 × 0.4   (unknown age = 365 days)
-chainMult    = 1 + min(chains - 1, 3) × 0.05            (1.00 … 1.15)
-```
+Measured fit (not asserted): R² 0.2599; median absolute log error 1.1831; median absolute percentage error 85.9%. Walk-forward — fit on protocols listed on or before 2024-02-18 (48 peers), tested on the 47 listed after — median absolute log error 1.1663, median absolute percentage error 88.8%. Leave-one-out (128 refits): median absolute log error 1.3601, median absolute percentage error 89.4%, against 1.7104 / 92.6% for the median-multiple baseline on the same check. Rank ranges come from 200 deterministic bootstrap refits (seed 20261114, specification fixed from the full training set).
 
-The implied value is rounded to a whole dollar, minimum $1. Rows rank by
-implied value descending, ties broken by slug ascending. Every multiplier is
-stored per row in `board.json` and shown in the dashboard's detail view, so
-any row's arithmetic can be reproduced from its TVL alone.
+One fitted coefficient deserves a plain reading: the 7-day TVL change enters with a large negative coefficient (−4.25 on the clipped change). In this snapshot, explosive short-term TVL growth is associated with a lower sustainable market cap — mercenary inflows, not durable value. The model does not reward a one-week spike; it prices the protocol as if the spike will not stick.
 
-On the competition snapshot (2026-11-14, 758 protocols, 128 live-token
-protocols with mcap and TVL > 0 — one protocol records a negative mcap and
-is excluded) the global peer multiple is **0.2138**.
-Category multiples range from 0.0125 (Onchain Capital Allocator, 2 peers —
-falls back, so not used) to 1.2205 (Cross Chain Bridge, 4 peers); categories
-actually used include Dexs 0.3424 (11 peers), Lending 0.1324 (15 peers),
-RWA 0.2748 (9 peers) and Liquid Staking 0.0406 (9 peers). The dashboard
-lists the full peer-multiple table.
+## Farm plans, netted to the dollar
 
-## How to run locally
+Every row carries 8 steps from a template of its category family (DEX, lending, yield, bridge, derivatives, staking, stablecoin, RWA, consumer, privacy, infra, general), filled with the row's own chain, TVL tier and name. Deposit tiers by TVL ($100–$5,000) plus estimated gas per transaction by chain; median plan cost $166. Each plan closes with a netting line from the row's own numbers: total cost, implied value, cost as a percentage of implied value, and the breakeven airdrop share (cost ÷ implied value). No airdrop is promised anywhere — the breakeven share is arithmetic, not a forecast.
+
+## What this does not claim
+
+The implied value is a comps fit, not a prediction that a token launches, when it launches, or what it lists at. The fit is weak in absolute terms (R² 0.26; a typical prediction is off by ~86% in percentage terms) because market-cap/TVL multiples in this snapshot span orders of magnitude; the claim is only that the fitted model beats the median baseline out of sample, and the board shows the resulting rank uncertainty on every row. Categories with fewer than 8 live peers have no category effect. 33 of the 128 training peers carry no listing date, so the walk-forward test covers the dated 95 only. Gas figures are planning estimates at typical fees, not quotes.
+
+## Run it
+
+Node 22, standard library only, no network at run time:
 
 ```sh
 mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input <kit>/input/snapshot.json
 ```
 
-Then serve the output directory and open the dashboard, e.g.:
+Two runs write identical bytes. The program writes `board.json`, `data.js`, the dashboard, the screenshots and `dossier.json` (via `vendor/makefun-board.ts`). Open `out/dashboard/index.html` — the board is sortable and filterable, every row opens a detail view with its plan, and the live and excluded views sit below it. Take the three screenshots from the rendered page: the board, a protocol's detail view, and a filtered view.
 
-```sh
-cd out && python3 -m http.server 8000
-# open localhost:8000/dashboard/ in a browser
-```
+## License
 
-The program writes `out/board.json` (`{rows}` — 200 ranked rows),
-`out/data.js` (`window.RADAR`, the dashboard's dataset),
-`out/dashboard/` (the static page), `out/screenshots/` and
-`out/dossier.json`. It refuses to write output if the board gate fails
-(watchlist coverage, ranks 1..n, sorted by implied value, farm steps of
-20–600 characters, positive integer implied values). Runs are deterministic:
-two runs on the same snapshot write byte-identical `board.json`, `data.js`
-and `dossier.json`.
-
-## The dashboard
-
-A single static page, no framework, no network: sortable columns (rank,
-protocol, category, chains, TVL, 7d change, age, implied value), filters
-(text search, category, chain, minimum TVL, watchlist-only), a Live-token
-tab, and a detail view per protocol with the full model breakdown, the farm
-plan and the protocol facts. Deep links work too: `#detail=<slug>`,
-`#cat=<category>`, `#q=<text>`, `#tab=live`.
-
-## Board coverage
-
-200 rows: the full 40-protocol watchlist plus 160 early pre-token protocols
-below the $50M floor, chosen by TVL. Every row carries 6 farm steps. The
-Live tab holds 24 live-token protocols by market cap.
-
-## Layout
-
-- `main.ts` — entrypoint: parses the snapshot, builds the board, enforces
-  the gate, writes the outputs and the dossier.
-- `lib/model.ts` — the peer-multiple model, farm plans, snapshot parsing
-  and the board gate.
-- `vendor/makefun-board.ts` — make.fun's dossier library (kit copy).
-- `dashboard/` — `index.html`, `app.css`, `app.js` (static, no network).
-- `screenshots/` — `1-board.png`, `2-detail.png`, `3-filtered.png`.
-
-## Notes
-
-- "Records no token" means the snapshot carries no market cap, CoinGecko id
-  or symbol for the protocol. It is DefiLlama's record, not proof that no
-  token exists.
-- Implied value is this radar's own claim, never a prediction that a token
-  will be issued, and never financial advice. Farm steps never ask for a
-  payment to claim anything.
+MIT — see [LICENSE](LICENSE). SPDX-License-Identifier: MIT.

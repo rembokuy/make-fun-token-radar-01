@@ -1,108 +1,83 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Token Radar — pre-token protocols ranked by implied value</title>
+<title>Token Radar — fitted launch pricing</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<header class="top">
-  <div class="wrap">
-    <p class="kicker">DEFI · PRE-TOKEN RADAR · MODEL radar-2-peer</p>
-    <h1>Token Radar</h1>
-    <p class="sub">Which protocol is worth farming next — and what its launch would be worth if its record stayed as it is. Every protocol below records no token. Implied value is this radar&rsquo;s own claim, never a promise that a token is issued.</p>
-    <div class="stats" id="stats">
-      <div class="stat"><b id="st-watch">—</b><span>watchlist protocols</span></div>
-      <div class="stat"><b id="st-board">—</b><span>ranked on the board</span></div>
-      <div class="stat"><b id="st-early">—</b><span>early finds below the floor</span></div>
-      <div class="stat"><b id="st-live">—</b><span>live tokens set aside</span></div>
-      <div class="stat"><b id="st-asof">—</b><span>snapshot date · DefiLlama</span></div>
-    </div>
-  </div>
+<header>
+  <h1>Token Radar</h1>
+  <p class="sub">Fitted launch pricing, walk-forward-tested, 8-step farm plans netted to the dollar — every one of 758 protocols accounted for.</p>
+  <p class="accounting" id="accounting">Loading the snapshot…</p>
 </header>
-<main class="wrap">
-  <nav class="tabs" aria-label="Views">
-    <button id="tab-board" class="tab on" type="button">Ranked board</button>
-    <button id="tab-live" class="tab" type="button">Live tokens</button>
-  </nav>
 
-  <section id="view-board" aria-label="Ranked board">
-    <div class="filters">
-      <label>Search <input id="f-q" type="search" placeholder="name, slug or category…" autocomplete="off"></label>
-      <label>Category <select id="f-cat"><option value="">All categories</option></select></label>
-      <label>Chain <select id="f-chain"><option value="">All chains</option></select></label>
-      <label>Min TVL <select id="f-tvl">
-        <option value="0">Any TVL</option>
-        <option value="50000000">$50M+</option>
-        <option value="100000000">$100M+</option>
-        <option value="500000000">$500M+</option>
-        <option value="1000000000">$1B+</option>
-      </select></label>
-      <label class="check"><input id="f-watch" type="checkbox"> Watchlist only</label>
-      <button id="f-reset" type="button">Reset</button>
-    </div>
-    <p class="count" id="count"></p>
-    <div class="tablewrap">
-      <table id="board">
-        <thead><tr>
-          <th data-sort="rank" class="num on">#</th>
-          <th data-sort="name">Protocol</th>
-          <th data-sort="category">Category</th>
-          <th data-sort="chains">Chains</th>
-          <th data-sort="tvl_usd" class="num">TVL</th>
-          <th data-sort="change_7d" class="num">7d</th>
-          <th data-sort="age_days" class="num">Age</th>
-          <th data-sort="implied_value_usd" class="num">Implied value</th>
-        </tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-    <p class="hint">Click a row for the full model maths and the farm plan. Click a column heading to sort.</p>
-  </section>
+<section id="kpis" aria-label="Key numbers"></section>
 
-  <section id="view-live" aria-label="Live tokens" hidden>
-    <p class="lede">These protocols already trade, so the board shows the market&rsquo;s own value for them — never a model&rsquo;s. They are kept apart from the ranked board.</p>
-    <div class="tablewrap">
-      <table id="live">
-        <thead><tr>
-          <th data-lsort="name">Protocol</th>
-          <th data-lsort="category">Category</th>
-          <th data-lsort="chains">Chains</th>
-          <th data-lsort="tvl_usd" class="num">TVL</th>
-          <th data-lsort="mcap_usd" class="num">Market cap</th>
-          <th data-lsort="mcap_tvl" class="num">Mcap / TVL</th>
-          <th data-lsort="change_7d" class="num">7d</th>
-        </tr></thead>
-        <tbody id="live-rows"></tbody>
-      </table>
-    </div>
-  </section>
+<section class="controls">
+  <input id="q" type="search" placeholder="Search a protocol…" aria-label="Search">
+  <select id="cat" aria-label="Category"><option value="">All categories</option></select>
+  <select id="minTvl" aria-label="Minimum TVL">
+    <option value="0">Any TVL</option>
+    <option value="50000000">$50M+ TVL</option>
+    <option value="100000000">$100M+ TVL</option>
+    <option value="500000000">$500M+ TVL</option>
+    <option value="1000000000">$1B+ TVL</option>
+  </select>
+  <label><input id="watchOnly" type="checkbox"> Watchlist only</label>
+  <label><input id="wideOnly" type="checkbox"> Wide rank range only</label>
+  <button id="reset" type="button">Reset</button>
+</section>
 
-  <section id="detail" aria-label="Protocol detail" hidden>
-    <div class="detail-head"><h2 id="d-title"></h2><button id="d-close" type="button" aria-label="Close detail">×</button></div>
-    <div id="d-body"></div>
-  </section>
+<section id="detail" hidden></section>
 
-  <section class="model" aria-label="How the model works">
-    <h2>How the implied value is worked out</h2>
-    <p class="formula">implied&nbsp;FDV = TVL × peer&nbsp;multiple × growth&nbsp;× maturity&nbsp;× chain</p>
-    <ul class="model-list">
-      <li><b>Peer multiple</b> — for each category, the median market-cap ÷ TVL of the snapshot&rsquo;s own live-token protocols in that category. A category with fewer than 3 live peers uses the global median instead. No protocol name is ever special-cased; every figure comes from the snapshot.</li>
-      <li><b>Growth</b> — 1 + clamped 7-day TVL change ÷ 100 × 0.5, with the change clamped to −60% … +120%.</li>
-      <li><b>Maturity</b> — 0.6 + min(age in days, 1095) ÷ 1095 × 0.4. A protocol tracked longer counts for more; unknown age counts as 365 days.</li>
-      <li><b>Chain</b> — 1 + min(chains − 1, 3) × 0.05, up to 1.15: a protocol live on more chains counts for more.</li>
-    </ul>
-    <p class="formula-note">Global peer multiple: <b id="m-global">—</b> (median mcap ÷ TVL across all live-token protocols). Rows are ranked by implied value, highest first; ties break by slug.</p>
-    <h3>Peer multiples by category</h3>
-    <div class="tablewrap"><table id="peers">
-      <thead><tr><th>Category</th><th class="num">Peer multiple</th><th class="num">Live peers</th></tr></thead>
-      <tbody id="peer-rows"></tbody>
-    </table></div>
-    <p class="note">Categories with fewer than 3 live-token peers are not listed here: they use the global multiple above. &ldquo;Records no token&rdquo; means the snapshot carries no market cap, CoinGecko id or symbol for the protocol — it is DefiLlama&rsquo;s record, not proof that no token exists. Farm steps are this radar&rsquo;s own plan, not financial advice; never pay to claim an airdrop.</p>
-  </section>
+<main>
+  <h2 id="boardTitle">Ranked board — pre-token protocols by fitted implied value</h2>
+  <p class="hint">Click a column header to sort. Click a row for its detail view and farm plan. Implied value is the fitted comps value; the median column is the category-median baseline beside it.</p>
+  <table id="board">
+    <thead><tr>
+      <th data-sort="rank">Rank</th>
+      <th data-sort="name">Protocol</th>
+      <th data-sort="category">Category</th>
+      <th data-sort="chains">Chains</th>
+      <th data-sort="tvl_usd">TVL</th>
+      <th data-sort="implied_value_usd">Implied value (fitted)</th>
+      <th data-sort="median_value_usd">Median comp</th>
+      <th data-sort="width">Rank range (200 refits)</th>
+      <th data-sort="farm_cost_usd">Farm cost</th>
+      <th data-sort="breakeven_share_pct">Breakeven share</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p class="count" id="count"></p>
 </main>
-<footer class="wrap"><p>Token Radar · model radar-2-peer · data as of <span id="ft-asof">—</span> · source DefiLlama · snapshot floor $50M · 758 protocols in the snapshot.</p></footer>
+
+<section id="model">
+  <h2>Value model — fitted, tested, and its limits</h2>
+  <div id="modelBody">Loading…</div>
+</section>
+
+<section id="liveWrap">
+  <h2>Live-token protocols — the token already trades (416)</h2>
+  <p class="hint">The board ranks only protocols that record no token. These are set aside here, with their market caps where the snapshot carries one — they are also the peers the model was fitted on.</p>
+  <table id="live">
+    <thead><tr><th>Protocol</th><th>Category</th><th>Chains</th><th>TVL</th><th>Market cap</th><th>Multiple</th><th>7d</th></tr></thead>
+    <tbody id="liveRows"></tbody>
+  </table>
+</section>
+
+<section id="excludedWrap">
+  <h2>Excluded from the board — 53, each with its reason</h2>
+  <p class="hint">Centralised exchanges and versioned names are set aside, not hidden: a CEX token is an exchange's business, not a protocol launch, and a V2 name is a version of a protocol whose token already trades.</p>
+  <table id="excluded">
+    <thead><tr><th>Protocol</th><th>Category</th><th>TVL</th><th>Reason</th></tr></thead>
+    <tbody id="excludedRows"></tbody>
+  </table>
+</section>
+
+<footer>
+  <p>Token Radar (radar-3-fitted). Snapshot 2026-11-14, DefiLlama protocols at or above $5M TVL. Implied values are the entry's own fitted claim, never make.fun's; no airdrop is promised. Farm costs are planning estimates: deposit tier by TVL plus estimated gas.</p>
+</footer>
 <script src="../data.js"></script>
 <script src="app.js"></script>
 </body>
